@@ -1,0 +1,2 @@
+Area of a triangle : 2
+Area of a quadrilateral : 4
