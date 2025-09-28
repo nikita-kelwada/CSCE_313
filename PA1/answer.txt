@@ -1,0 +1,199 @@
+Nikita Kelwada CSCE 313 answer.txt
+
+1. File Size Scaling Analysis
+
+Testing different file sizes with 512-byte buffer:
+- 1MB file: 0.033 seconds
+- 10MB file: 0.353 seconds  
+- 50MB file: 1.535 seconds
+- 100MB file: 2.934 seconds
+
+The transfer time scales linearly with file size, which makes sense because each MB needs the same amount of requests and I/O work. This shows the file transfer works correctly.
+
+2. Main Bottleneck Analysis
+
+Testing 100MB file with different buffer sizes:
+Buffer = 64 bytes: 28.64 seconds (3.2M messages)
+Buffer = 128 bytes: 16.39 seconds (1.6M messages) 
+Buffer = 256 bytes: 10.28 seconds (819K messages)
+Buffer = 512 bytes: 10.09 seconds (819K messages)
+Buffer = 1024 bytes: 10.12 seconds (819K messages)
+Buffer = 2048 bytes: 10.16 seconds (819K messages)
+
+With small buffers (64 bytes), it took 29 seconds and needed 3.2 million messages. Performance improved a lot up to 256 bytes, but then plateaued around 10 seconds for larger buffers.
+
+Looking at the system stats, most time gets spent in system calls rather than actual work. With 64-byte buffers: 18.90 seconds in system calls vs 9.41 seconds user time. This shows the bottleneck is all the back-and-forth communication between client and server.
+
+CONCLUSION:
+
+The main bottleneck is communication protocol overhead. Small buffers waste time with too many messages, but even with optimal buffers, the request-response design limits how fast you can go.
+
+SOME RAW DATA:
+
+nikitakelwada@Nikitas-MacBook-Air-3 PA-1 % for m in 64 128 256 512 1024 2048; do echo ---- m=$m ----; /usr/bin/time -l ./client -m $m -f t100M.bin; diff -q BIMDC/t100M.bin received/t100M.bin || echo DIFF\ FAILED!; done
+---- m=64 ----
+Wrote received/t100M.bin (104857600 bytes)
+Client-side is done and exited
+Server terminated
+       28.64 real         9.41 user        18.90 sys
+           406781952  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+               45688  page reclaims
+                 839  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+             3276804  messages sent
+             3276803  messages received
+                   0  signals received
+             3275678  voluntary context switches
+               15507  involuntary context switches
+        110889804947  instructions retired
+         29505202259  cycles elapsed
+           342805192  peak memory footprint
+---- m=128 ----
+Wrote received/t100M.bin (104857600 bytes)
+Client-side is done and exited
+Server terminated
+       16.39 real         6.59 user         9.75 sys
+           406863872  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+               41123  page reclaims
+                 846  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+             1638404  messages sent
+             1638403  messages received
+                   0  signals received
+             1638216  voluntary context switches
+                3730  involuntary context switches
+         73128522702  instructions retired
+         20438932086  cycles elapsed
+           268110488  peak memory footprint
+---- m=256 ----
+Wrote received/t100M.bin (104857600 bytes)
+Client-side is done and exited
+Server terminated
+       10.28 real         4.29 user         6.08 sys
+           406831104  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+               37051  page reclaims
+                 846  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+              819204  messages sent
+              819203  messages received
+                   0  signals received
+              819013  voluntary context switches
+                4371  involuntary context switches
+         52644732381  instructions retired
+         14177542147  cycles elapsed
+           201558752  peak memory footprint
+---- m=512 ----
+Wrote received/t100M.bin (104857600 bytes)
+Client-side is done and exited
+Server terminated
+       10.09 real         4.10 user         6.04 sys
+           406847488  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+               37060  page reclaims
+                 835  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+              819204  messages sent
+              819203  messages received
+                   0  signals received
+              818730  voluntary context switches
+                9750  involuntary context switches
+         53125424703  instructions retired
+         13456773246  cycles elapsed
+           201509600  peak memory footprint
+---- m=1024 ----
+Wrote received/t100M.bin (104857600 bytes)
+Client-side is done and exited
+Server terminated
+       10.12 real         4.14 user         6.03 sys
+           406896640  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+               37067  page reclaims
+                 835  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+              819204  messages sent
+              819203  messages received
+                   0  signals received
+              818223  voluntary context switches
+               14915  involuntary context switches
+         52682196782  instructions retired
+         13608300185  cycles elapsed
+           201558752  peak memory footprint
+---- m=2048 ----
+Wrote received/t100M.bin (104857600 bytes)
+Client-side is done and exited
+Server terminated
+       10.16 real         4.10 user         6.12 sys
+           406880256  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+               37061  page reclaims
+                 835  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+              819204  messages sent
+              819203  messages received
+                   0  signals received
+              818730  voluntary context switches
+                8297  involuntary context switches
+         53153141899  instructions retired
+         13415451272  cycles elapsed
+           201525984  peak memory footprint
+
+   nikitakelwada@Nikitas-MacBook-Air-3 PA-1 % time ./client -m 512 -f test1M.bin
+         time ./client -m 512 -f test10M.bin
+         time ./client -m 512 -f test50M.bin
+         time ./client -m 512 -f test100M.bin
+         Changing initial buffer capacity of: 512...
+         DONE! New buffer capacity is: 512
+         File length: 1000000
+         The data exchange performed took: 33270 microseconds
+         Client-side is done and exited
+         Server terminated
+         ./client -m 512 -f test1M.bin  0.07s user 0.13s system 15% cpu 1.245 total
+         Changing initial buffer capacity of: 512...
+         DONE! New buffer capacity is: 512
+         File length: 10000000
+         The data exchange performed took: 352994 microseconds
+         Client-side is done and exited
+         Server terminated
+         ./client -m 512 -f test10M.bin  0.14s user 0.34s system 31% cpu 1.542 total
+         Changing initial buffer capacity of: 512...
+         DONE! New buffer capacity is: 512
+         File length: 50000000
+         The data exchange performed took: 1.53511e+06 microseconds
+         Client-side is done and exited
+         Server terminated
+         ./client -m 512 -f test50M.bin  0.50s user 1.14s system 60% cpu 2.697 total
+         Changing initial buffer capacity of: 512...
+         DONE! New buffer capacity is: 512
+         File length: 100000000
+         The data exchange performed took: 2.93442e+06 microseconds
+         Client-side is done and exited
+         Server terminated
+         ./client -m 512 -f test100M.bin  0.83s user 2.23s system 74% cpu 4.090 total
+         nikitakelwada@Nikitas-MacBook-Air-3 PA-1 % 
