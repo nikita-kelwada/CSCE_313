@@ -8,7 +8,7 @@
 	Please include your Name, UIN, and the date below
 	Name: Nikita Kelwada
 	UIN: 434003223
-	Date: 9/19/2025
+	Date: 9/27/25 (for new PA requirements)
 */
 #include "common.h"
 #include "FIFORequestChannel.h"
@@ -16,238 +16,222 @@
 #include <iomanip>
 #include <sys/stat.h>
 #include <sys/types.h>
-#include <cstring>  // Add this for strcmp
 
 using namespace std;
 
 int main(int argc, char *argv[])
 {
-    // Process -m flag first to get buffer capacity before forking
-    int buffercapacity = MAX_MESSAGE; // default
-    for (int i = 1; i < argc - 1; i++) {
-        if (strcmp(argv[i], "-m") == 0) {
-            buffercapacity = atoi(argv[i + 1]);
-            break;
-        }
-    }
-
+    // fork the server process first
     int pid = fork();
-
-    if (pid == 0)
-    {
-        string buffer_val = to_string(buffercapacity);
-        char* const sv_argv[] = { 
-            (char*)"server", 
-            (char*)"-m", 
-            (char*)buffer_val.c_str(), 
-            nullptr 
-        };
-        execvp("./server", sv_argv);
+    
+    if (pid == 0) {
+        // child process - run the server
+        char* server_args[] = {(char*)"server", nullptr};
+        execvp("./server", server_args);
     }
-    else
-    {
-        //Parent process
-        FIFORequestChannel chan("control", FIFORequestChannel::CLIENT_SIDE);
-
-        //need to sure the command line arguments are correct
-        int c = 0; //will be used to process command line arguments
-
-        int patient = -1;
-        double time = -1;
-        int ecg = 0;
-        bool newChannel = false; //boolean to determine if user wants a new channel
-        string fileName = ""; // string to hold file name if user wants to transfer a file
-
-        // NOTE: buffercapacity is already declared above, don't redeclare it
-
-        //process command line arguments
-        while ((c = getopt(argc, argv, "p:t:e:f:cm:")) != -1)
-        { //this loop processes each command line argument
-            switch (c)
-            {
-            case 'p': 
-                if (optarg) // if p flag is present, then we set patient to the value of the argument
-                {
-                    patient = atoi(optarg);
-                } 
+    
+    // parent process continues here
+    FIFORequestChannel chan("control", FIFORequestChannel::CLIENT_SIDE);
+    
+    // instantiat variables for command line arguments
+    int opt;
+    int p = -1;
+    double t = -1.0;
+    int e = 0;
+    string filename = "";
+    bool new_channel = false;
+    int buffer_cap = MAX_MESSAGE;
+    
+    // parse through the command line arguments
+    while ((opt = getopt(argc, argv, "p:t:e:f:cm:")) != -1) { 
+        switch (opt) {
+            case 'p':
+                p = atoi(optarg);
                 break;
             case 't':
-                if (optarg)
-                {
-                    time = atof(optarg); // if t flag is present, then we set time to the value of the argument
-                }
+                t = atof(optarg);
                 break;
-            case 'e': 
-                if (optarg)
-                {
-                    ecg = atoi(optarg); // if e flag is present, then we set ecg to the value of the argument
-                }
+            case 'e':
+                e = atoi(optarg);
                 break;
-            case 'f': 
-                if (optarg)
-                {
-                    fileName = string(optarg); // if f flag is present, then we set fileName to the value of the argument 
-                }
+            case 'f':
+                filename = optarg;
                 break;
             case 'c':
-                newChannel = true; //set new channel boolean to true
-                break;
-            case '?':
-                EXITONERROR("Invalid Option");// if user enters an invalid option, we exit
+                new_channel = true;
                 break;
             case 'm':
-                cout << "Changing initial buffer capacity of: " << buffercapacity << "..." << endl;// if m flag is present, then we change the buffer capacity to the value of the argument
-                buffercapacity = atoi(optarg);
-                cout << "DONE! New buffer capacity is: " << buffercapacity << endl;// if m flag is present, then we change the buffer capacity to the value of the argument
+                cout << "Changing buffer capacity from " << buffer_cap << "..." << endl;
+                buffer_cap = atoi(optarg);
+                cout << "New buffer capacity: " << buffer_cap << endl;
                 break;
-            }
         }
-
-        // now we need to validate the command line arguments
-        if ((time < 0 || time > 59.996) && time != -1) {EXITONERROR("Invalid time");}// time must be between 0 and 59.996 seconds
-        if (ecg < 0 || ecg > 2) {EXITONERROR("Invalid ecg value");}// ecg can only be 0, 1, or 2
-
-        if (time != -1 && ecg != 0) // if the user wants an individual data point
-        {
-            // validate patient number
-            if (patient < 1 || patient > 15){EXITONERROR("Invalid patient");}
-            datamsg dataPoint(patient, time, ecg);// create data message
-            chan.cwrite(&dataPoint, sizeof(datamsg));// send data message to server
-
-            double result = 0.0;
-            chan.cread(&result, sizeof(double));// read result from server
-            cout << "For person " << patient
-                 << ", at time " << fixed << setprecision(3) << time // set precision to 3 decimal places because time is in milliseconds
-                 << ", the value of ecg " << ecg
-                 << " is " << fixed << setprecision(2) << result << endl;
-        }
-
-        // here itll handle the case where the user wants all data points for a patient
-        else if (patient != -1)
-        {
-            if (patient < 1 || patient > 15)//just in case user enters invalid patient number
-            {
-                EXITONERROR("Invalid patient");
-            }
-
-            struct timeval start; // will be used to get the time taken for the data transfer
-            gettimeofday(&start, NULL);
-            double totalTime = 0;
-            //  define the output file
-            ofstream myfile;
-            mkdir("received", 0777);
-            string fileName = "received/x1.csv"; // Fixed: should always be x1.csv
-            myfile.open(fileName);
-
-            //the loop will run 1000 times to get all the data points for the patient
-            for (int i = 0; i < 1000; i++)
-            {
-                //first ecg column
-                datamsg req1(patient, totalTime, 1);
-                chan.cwrite(&req1, sizeof(datamsg));
-
-                double received1 = 0.0;
-                chan.cread(&received1, sizeof(double));
-                myfile << totalTime << "," << received1 << ","; // write time and ecg1 value to file
-
-                //second ecg column
-                datamsg req2(patient, totalTime, 2);
-                chan.cwrite(&req2, sizeof(datamsg));
-                double received2 = 0.0;
-                chan.cread(&received2, sizeof(double));
-                myfile << received2 << endl;
-                totalTime += 0.004;
-            }
-
-            struct timeval end;
-            gettimeofday(&end, NULL);
-
-            // then  calculate the time taken for the data transfer
-            double totalStart = 0;
-            double totalEnd = 0;
-            totalStart = (double)start.tv_usec + (double)start.tv_sec * 1000000;
-            totalEnd = (double)end.tv_usec + (double)end.tv_sec * 1000000;
-            cout << "The data exchange performed took: " << totalEnd - totalStart << " microseconds." << endl; // print time taken
-        }
-
-        // then handle the case where the user wants to transfer a file
-        else if (fileName != "") // if the user wants to transfer a file
-        {
-            // first we need to get the length of the file
-            filemsg getLen(0, 0);
-            std::vector<char> initial(sizeof(filemsg) + fileName.size() + 1);
-            memcpy(initial.data(), &getLen, sizeof(filemsg));
-            memcpy(initial.data() + sizeof(filemsg), fileName.c_str(), fileName.size() + 1);
-            chan.cwrite(initial.data(), initial.size());
-            __int64_t filelen;
-            chan.cread(&filelen, sizeof(__int64_t));
-            cout << "File length: " << filelen << endl;
-
-            // define the output file
-            ofstream myfile;
-            string file_name = "received/" + fileName;
-            myfile.open(file_name, ios::out | ios::binary); // make sure output file is binary
-            struct timeval start;
-            if (gettimeofday(&start, NULL) != 0) {
-                perror("gettimeofday");
-                exit(EXIT_FAILURE);
-            } // will be used to get the time taken for the file transfer
-
-            // then we need to transfer the file in chunks
-            __int64_t offset = 0;
-            __int64_t length = filelen;
-            std::vector<char> payload(buffercapacity);
-            while (length > offset) // while there is still data to be transferred
-            {
-                size_t chunk = static_cast<size_t>(min<__int64_t>(buffercapacity, length - offset));
-                filemsg segment(offset, chunk);
-                std::vector<char> header(sizeof(filemsg) + fileName.size() + 1);
-                memcpy(header.data(), &segment, sizeof(filemsg));
-                memcpy(header.data() + sizeof(filemsg), fileName.c_str(), fileName.size() + 1);
-                chan.cwrite(header.data(), header.size());
-
-                chan.cread(payload.data(), chunk);  // FIXED: read 'chunk' bytes, not 'buffercapacity'
-                myfile.write(payload.data(), chunk);
-                offset += chunk;
-            }
-            //this will get the end time for the file transfer
-            struct timeval end;
-            gettimeofday(&end, NULL);
-
-            double totalStart = 0;
-            double totalEnd = 0;
-            totalStart = (double)start.tv_usec + (double)start.tv_sec * 1000000; // convert to microseconds
-            totalEnd = (double)end.tv_usec + (double)end.tv_sec * 1000000;
-
-            cout << "The data exchange performed took: " << totalEnd - totalStart << " microseconds" << endl; // print time taken
-        }
-        else if (newChannel) // if the user wants a new channel
-        {
-            //test with new channel
-            MESSAGE_TYPE n = NEWCHANNEL_MSG;
-            chan.cwrite(&n, sizeof(MESSAGE_TYPE));
-            //then  need to read the name of the new channel that the server sends back
-            //but first  need to create a buffer to hold the name of the new channel
-            std::vector<char> newChan(30);
-            chan.cread(newChan.data(), buffercapacity);
-            FIFORequestChannel newChannel(newChan.data(), FIFORequestChannel::CLIENT_SIDE);
-            //cout << "New Channel Start" << endl;
-
-            datamsg testMessage(5, 0.32, 1);
-            newChannel.cwrite(&testMessage, sizeof(datamsg));
-
-            double received = 0.0;
-            newChannel.cread(&received, sizeof(double));
-            cout << "The ecg 1 value for person 5 at time 0.32 was: " << received << endl;
-
-            //would be good to close the new channel when done
-            MESSAGE_TYPE close = QUIT_MSG;
-            newChannel.cwrite(&close, sizeof(MESSAGE_TYPE));
-            //cout << "New Channel will end " << endl;
-        }
-        MESSAGE_TYPE m = QUIT_MSG;
-        chan.cwrite(&m, sizeof(MESSAGE_TYPE));
-        // wait(NULL);
-        usleep(1000000);
     }
+    
+    // validate inputs
+    if (t != -1.0 && (t < 0 || t > 59.996)) { 
+        EXITONERROR("Invalid time");
+    }
+    if (e < 0 || e > 2) {
+        EXITONERROR("Invalid ecg value");
+    }
+    
+    // Case 1: request single data point
+    if (t != -1.0 && e != 0) {
+        if (p < 1 || p > 15) {
+            EXITONERROR("Invalid patient");
+        }
+        // send data message
+        datamsg x(p, t, e);
+        chan.cwrite(&x, sizeof(datamsg));
+        // read reply
+        double reply;
+        chan.cread(&reply, sizeof(double));
+        
+        cout << "For person " << p << ", at time " << fixed << setprecision(3) << t 
+             << ", the value of ecg " << e << " is " << fixed << setprecision(2) << reply << endl;
+    }
+    // Case 2: request first 1000 data points for a patient
+    else if (p != -1) {
+        if (p < 1 || p > 15) {
+            EXITONERROR("Invalid patient");
+        }
+        
+        struct timeval start_time;
+        gettimeofday(&start_time, NULL);
+        
+        // create received directory if it doesn't exist
+        mkdir("received", 0777);
+        
+        ofstream outfile;
+        string out_filename = "received/x" + to_string(p) + ".csv";
+        outfile.open(out_filename);
+        
+        double time_stamp = 0.0;
+        
+        // get 1000 data points
+        //the for loop works by requesting ecg1 and ecg2 values for the same timestamp in each iteration
+        for (int i = 0; i < 1000; i++) {
+            // request ecg1
+            datamsg msg1(p, time_stamp, 1); 
+            chan.cwrite(&msg1, sizeof(datamsg));
+            double val1;
+            chan.cread(&val1, sizeof(double));
+            
+            outfile << time_stamp << "," << val1 << ",";
+            
+            // request ecg2
+            datamsg msg2(p, time_stamp, 2);
+            chan.cwrite(&msg2, sizeof(datamsg));
+            double val2;
+            chan.cread(&val2, sizeof(double));
+            
+            outfile << val2 << endl;
+            
+            time_stamp += 0.004;
+        }
+        
+        outfile.close();
+        
+        struct timeval end_time;
+        gettimeofday(&end_time, NULL);
+        
+        double start_usec = (double)start_time.tv_sec * 1000000 + (double)start_time.tv_usec;
+        double end_usec = (double)end_time.tv_sec * 1000000 + (double)end_time.tv_usec;
+        
+        cout << "The data exchange performed took: " << end_usec - start_usec << " microseconds." << endl;
+    }
+    // Case 3: request a file
+    //this part is adapted from client_correct.cpp provided in the project description
+    else if (filename != "") {
+        // first get the file length
+        filemsg len_request(0, 0);
+        int msg_len = sizeof(filemsg) + filename.size() + 1;
+        char* buf = new char[msg_len];
+        memcpy(buf, &len_request, sizeof(filemsg));
+        strcpy(buf + sizeof(filemsg), filename.c_str());
+        // send file length request
+        chan.cwrite(buf, msg_len);
+        delete[] buf;
+        // read file length
+        __int64_t file_length;
+        chan.cread(&file_length, sizeof(__int64_t));
+        cout << "File lenght: " << file_length << endl;
+        
+        // open output file
+        ofstream outfile;
+        string output_name = "received/" + filename;
+        outfile.open(output_name, ios::out | ios::binary);
+        
+        struct timeval start_time;
+        gettimeofday(&start_time, NULL);
+        
+        // request file in chunks
+        //the buffer_cap variable is used to determine the chunk size
+        __int64_t offset = 0;
+        char* data_buf = new char[buffer_cap];
+        
+        while (offset < file_length) {
+            __int64_t remaining = file_length - offset;
+            int chunk_size = (remaining < buffer_cap) ? remaining : buffer_cap;
+            
+            filemsg file_request(offset, chunk_size);
+            int request_len = sizeof(filemsg) + filename.size() + 1;
+            char* request_buf = new char[request_len];
+            memcpy(request_buf, &file_request, sizeof(filemsg));
+            strcpy(request_buf + sizeof(filemsg), filename.c_str());
+            
+            // send file request
+            chan.cwrite(request_buf, request_len);
+            delete[] request_buf;
+            
+            // read file data
+            chan.cread(data_buf, buffer_cap);
+            outfile.write(data_buf, chunk_size);
+            // update offset
+            offset += chunk_size;
+        }
+    
+        delete[] data_buf;
+        outfile.close();
+        
+        struct timeval end_time;
+        gettimeofday(&end_time, NULL);
+        // calculate time taken
+        double start_usec = (double)start_time.tv_sec * 1000000 + (double)start_time.tv_usec;
+        double end_usec = (double)end_time.tv_sec * 1000000 + (double)end_time.tv_usec;
+        
+        cout << "The data exchange performed took: " << end_usec - start_usec << " microseconds" << endl;
+    }
+    // Case 4: create new channel
+    else if (new_channel) {
+        MESSAGE_TYPE msg_type = NEWCHANNEL_MSG;
+        chan.cwrite(&msg_type, sizeof(MESSAGE_TYPE));
+        // read new channel name
+        char new_chan_name[30];
+        chan.cread(new_chan_name, buffer_cap);
+        
+        FIFORequestChannel new_chan(new_chan_name, FIFORequestChannel::CLIENT_SIDE);
+        
+        // test the new channel with a data request
+        datamsg test(5, 0.32, 1);
+        new_chan.cwrite(&test, sizeof(datamsg));
+        
+        double result;
+        new_chan.cread(&result, sizeof(double));
+        cout << "The ecg 1 value for person 5 at time 0.32 was: " << result << endl;
+        
+        // close new channel
+        MESSAGE_TYPE quit = QUIT_MSG;
+        new_chan.cwrite(&quit, sizeof(MESSAGE_TYPE));
+    }
+    
+    // close control channel
+    MESSAGE_TYPE m = QUIT_MSG;
+    chan.cwrite(&m, sizeof(MESSAGE_TYPE));
+    
+    // wait for server to finish
+    usleep(1000000);
+    
+    return 0;
 }
