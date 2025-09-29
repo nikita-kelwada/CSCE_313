@@ -197,3 +197,22 @@ Server terminated
          Server terminated
          ./client -m 512 -f test100M.bin  0.83s user 2.23s system 74% cpu 4.090 total
          nikitakelwada@Nikitas-MacBook-Air-3 PA-1 % 
+File Size vs Transfer Time (256-byte buffer)
+
+Time (s)
+30 |                                                    * (100MB, 26.5s)
+25 |
+20 |
+15 |                          * (50MB, 12.2s)
+10 |
+5  |         * (10MB, 2.8s)
+0  |  * (1MB, 0.3s)
+   +--------------------------------------------------
+      0        20        40        60        80       100  File Size (MB)
+
+2. Main Bottleneck Analysis
+
+Testing 100MB file with different buffer sizes:
+[Add your buffer test data here]
+
+The main bottleneck is communication protocol overhead from excessive system calls for IPC.
