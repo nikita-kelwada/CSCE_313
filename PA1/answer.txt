@@ -1,14 +1,29 @@
 Nikita Kelwada CSCE 313 answer.txt
 
+
+
 1. File Size Scaling Analysis
 
 Testing different file sizes with 512-byte buffer:
-- 1MB file: 0.033 seconds
-- 10MB file: 0.353 seconds  
-- 50MB file: 1.535 seconds
-- 100MB file: 2.934 seconds
+1MB file: 0.327 seconds (327189 microseconds)
+10MB file: 2.784 seconds (2.78386e+06 microseconds)
+50MB file: 12.238 seconds (1.22384e+07 microseconds)
+100MB file: 26.546 seconds (2.65455e+07 microseconds)
 
-The transfer time scales linearly with file size, which makes sense because each MB needs the same amount of requests and I/O work. This shows the file transfer works correctly.
+The transfer time scales linearly with file size, which makes sense because each MB needs the same amount of requests and I/O work. This shows the file transfer works correctly because it has an exponential trend. 
+
+File Size vs Transfer Time (256-byte buffer)
+
+Time (s)
+30 |                                                    * (100MB, 26.5s)
+25 |
+20 |
+15 |                          * (50MB, 12.2s)
+10 |
+5  |         * (10MB, 2.8s)
+0  |  * (1MB, 0.3s)
+   +--------------------------------------------------
+      0        20        40        60        80       100  File Size (MB)
 
 2. Main Bottleneck Analysis
 
@@ -164,36 +179,47 @@ Server terminated
          13415451272  cycles elapsed
            201525984  peak memory footprint
 
-   nikitakelwada@Nikitas-MacBook-Air-3 PA-1 % time ./client -m 512 -f test1M.bin
-         time ./client -m 512 -f test10M.bin
-         time ./client -m 512 -f test50M.bin
-         time ./client -m 512 -f test100M.bin
-         Changing initial buffer capacity of: 512...
-         DONE! New buffer capacity is: 512
-         File length: 1000000
-         The data exchange performed took: 33270 microseconds
-         Client-side is done and exited
-         Server terminated
-         ./client -m 512 -f test1M.bin  0.07s user 0.13s system 15% cpu 1.245 total
-         Changing initial buffer capacity of: 512...
-         DONE! New buffer capacity is: 512
-         File length: 10000000
-         The data exchange performed took: 352994 microseconds
-         Client-side is done and exited
-         Server terminated
-         ./client -m 512 -f test10M.bin  0.14s user 0.34s system 31% cpu 1.542 total
-         Changing initial buffer capacity of: 512...
-         DONE! New buffer capacity is: 512
-         File length: 50000000
-         The data exchange performed took: 1.53511e+06 microseconds
-         Client-side is done and exited
-         Server terminated
-         ./client -m 512 -f test50M.bin  0.50s user 1.14s system 60% cpu 2.697 total
-         Changing initial buffer capacity of: 512...
-         DONE! New buffer capacity is: 512
-         File length: 100000000
-         The data exchange performed took: 2.93442e+06 microseconds
-         Client-side is done and exited
-         Server terminated
-         ./client -m 512 -f test100M.bin  0.83s user 2.23s system 74% cpu 4.090 total
-         nikitakelwada@Nikitas-MacBook-Air-3 PA-1 % 
+   niki.kelwada@instance-20250826-145723:~/CSCE_313/PA1$ time ./client -m 256 -f test1M.bin
+time ./client -m 256 -f test10M.bin
+time ./client -m 256 -f test50M.bin
+time ./client -m 256 -f test100M.bin
+Changing buffer capacity from 256...
+New buffer capacity: 256
+File lenght: 1048576
+The data exchange performed took: 327189 microseconds
+Client-side is done and exited
+Server terminated
+
+real    0m1.526s
+user    0m0.040s
+sys     0m0.071s
+Changing buffer capacity from 256...
+New buffer capacity: 256
+File lenght: 10485760
+The data exchange performed took: 2.78386e+06 microseconds
+Client-side is done and exited
+Server terminated
+
+real    0m3.975s
+user    0m0.263s
+sys     0m0.515s
+Changing buffer capacity from 256...
+New buffer capacity: 256
+File lenght: 52428800
+The data exchange performed took: 1.22384e+07 microseconds
+Client-side is done and exited
+Server terminated
+
+real    0m13.444s
+user    0m1.229s
+sys     0m2.631s
+Changing buffer capacity from 256...
+New buffer capacity: 256
+File lenght: 104857600
+The data exchange performed took: 2.65455e+07 microseconds
+Client-side is done and exited
+Server terminated
+
+real    0m27.763s
+user    0m2.652s
+sys     0m5.692s

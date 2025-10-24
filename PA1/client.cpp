@@ -212,35 +212,32 @@ int main(int argc, char *argv[])
 
             cout << "The data exchange performed took: " << totalEnd - totalStart << " microseconds" << endl; // print time taken
         }
-        else if (newChannel) // if the user wants a new channel
-        {
-            //test with new channel
+        FIFORequestChannel* active_chan = &chan;
+        FIFORequestChannel* new_chan_ptr = nullptr;
+
+        if (newChannel) {
             MESSAGE_TYPE n = NEWCHANNEL_MSG;
             chan.cwrite(&n, sizeof(MESSAGE_TYPE));
-            //then  need to read the name of the new channel that the server sends back
-            //but first  need to create a buffer to hold the name of the new channel
-            std::vector<char> newChan(30);
-            chan.cread(newChan.data(), buffercapacity);
-            FIFORequestChannel newChannel(newChan.data(), FIFORequestChannel::CLIENT_SIDE);
-            //cout << "New Channel Start" << endl;
-
-            datamsg testMessage(5, 0.32, 1);
-            newChannel.cwrite(&testMessage, sizeof(datamsg));
-
-            double received = 0.0;
-            newChannel.cread(&received, sizeof(double));
-            cout << "The ecg 1 value for person 5 at time 0.32 was: " << received << endl;
-
-            //would be good to close the new channel when done
-            MESSAGE_TYPE close = QUIT_MSG;
-            newChannel.cwrite(&close, sizeof(MESSAGE_TYPE));
-
-            //cout << "New Channel will end " << endl;
+            
+            char newChanName[100];
+            chan.cread(newChanName, sizeof(newChanName));
+            
+            new_chan_ptr = new FIFORequestChannel(newChanName, FIFORequestChannel::CLIENT_SIDE);
+            active_chan = new_chan_ptr;
         }
-        // good to have a a quit message to the server
+
+        // NOW replace ALL "chan.cwrite" and "chan.cread" in your data/file sections with:
+        // active_chan->cwrite and active_chan->cread
+
+        // At the very end, before the control channel QUIT:
+        if (new_chan_ptr) {
+            MESSAGE_TYPE close = QUIT_MSG;
+            new_chan_ptr->cwrite(&close, sizeof(MESSAGE_TYPE));
+            delete new_chan_ptr;
+        }
+
         MESSAGE_TYPE m = QUIT_MSG;
         chan.cwrite(&m, sizeof(MESSAGE_TYPE));
-        // wait(NULL);
         usleep(1000000);
     }
 }
