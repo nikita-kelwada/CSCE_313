@@ -30,10 +30,12 @@ static void printPrompt() {
     char tb[32];
     strftime(tb, sizeof(tb), "%b %d %H:%M:%S", lt);
 
-    // For Gradescope autograder
+    // Gradescope expects the prompt to always look like:
+    // "Sep 23 18:31:46 root:/autograder/source$ "
     std::cout << tb << " root:/autograder/source$ ";
     std::cout.flush();
 }
+
 
 //will close all file descriptors in the vector
 static void close_all(std::vector<int>& fds) {
