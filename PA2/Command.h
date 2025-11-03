@@ -6,34 +6,34 @@
 
 class Command {
 public:
-    // Raw command string for this pipeline segment (from Tokenizer)
-    std::string cmd;
+    // raw command string (one pipeline segment)
+    std::string raw_cmd;
 
-    // Final argv after parsing (argv[0] is the program)
-    std::vector<std::string> args;
+    // parsed argument list
+    std::vector<std::string> arguments;
 
-    // Quoted-substring store from Tokenizer
-    std::vector<std::string> inner_strings;
+    // inner quoted strings from tokenizer
+    std::vector<std::string> inner_segments;
 
-    // Flags and files for I/O/background
-    bool bg = false;
-    std::string in_file;
-    std::string out_file;
-    bool append_out = false;   // NEW: support for >>
+    // I/O and background flags
+    bool run_background = false;  // true if '&' present
+    std::string input_file;       // input redirection
+    std::string output_file;      // output redirection
+    bool append_output = false;   // true if ">>" used
 
-    // Construct from a raw pipeline-segment string and the shared inner_strings
-    Command(const std::string _cmd, std::vector<std::string> _inner_strings);
+    // constructor
+    Command(const std::string cmd_str, std::vector<std::string> inner_strs);
 
-    // Accessors used by the shell
-    bool hasInput()     const { return !in_file.empty(); }
-    bool hasOutput()    const { return !out_file.empty(); }
-    bool isBackground() const { return bg; }
+    // accessors
+    bool hasInput();
+    bool hasOutput();
+    bool isBackground();
 
 private:
-    // Helpers
-    static std::string trim(const std::string& s);
-    void parse();                // tokenizes and fills args/in/out/bg
-    std::string restorePlaceholders(const std::string& tok) const;
+    // helpers for trimming and parsing
+    std::string trim(const std::string str);
+    void locateRedirection();
+    void tokenizeArguments();
 };
 
 #endif
