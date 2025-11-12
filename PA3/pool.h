@@ -37,6 +37,7 @@ public:
     int num_tasks_unserviced = 0;
 private:
     std::mutex mtx;
+    std::condition_variable cv; //ONLY ADDITION TO POOL.H for conditional variable because of use in pool.cc
     std::vector<std::thread *> threads;
     std::vector<Task *> queue;
     volatile bool done = false;
