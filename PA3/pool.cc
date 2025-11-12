@@ -29,7 +29,7 @@ ThreadPool::~ThreadPool() {
 
 //TODO -> DONE
 void ThreadPool::SubmitTask(const string &name, Task *task) {
-    mtx.lock();; //needed for locking the queue
+    mtx.lock(); //needed for locking the queue
 
     if (done){ //check if pool is stopped
         mtx.unlock();
